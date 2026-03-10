@@ -112,7 +112,7 @@ while curr_x <= x[-1]:
     x_err.append(curr_x)
     curr_x += h1
 
-# --- ПОБУДОВА ГРАФІКІВ ---
+# ПОБУДОВА ГРАФІКІВ
 
 # Графік 1: Дисперсія
 plt.figure(1, figsize=(10, 5))
