@@ -1,80 +1,163 @@
-import numpy as np
+import os
+import csv
 import matplotlib.pyplot as plt
 
-# 1. Визначення функції та її аналітичної похідної [cite: 185]
-def M(t):
-    return 50 * np.exp(-0.1 * t) + 5 * np.sin(t)
+# Встановлюємо стиль для гарних графіків
+plt.style.use('seaborn-v0_8-muted')
 
-def M_prime_exact(t):
-    # Похідна: M'(t) = 50 * (-0.1) * e^(-0.1t) + 5 * cos(t)
-    return -5 * np.exp(-0.1 * t) + 5 * np.cos(t)
+# лінійна інтерполяція для знаходження y між вузлами
+def get_y_true(x_val, x_nodes, y_nodes):
+    for i in range(len(x_nodes) - 1):
+        if x_nodes[i] <= x_val <= x_nodes[i+1]:
+            return y_nodes[i] + (y_nodes[i+1] - y_nodes[i]) * (x_val - x_nodes[i]) / (x_nodes[i+1] - x_nodes[i])
+    return y_nodes[-1]
 
-# Точка обчислення (за прикладом t0 = 1)
-t0 = 1.0
-exact_val = M_prime_exact(t0)
+# зчитування даних з csv
+def read_data(filename):
+    x, y = [], []
+    with open(filename, 'r', encoding='utf-8') as f:
+        reader = csv.reader(f)
+        next(reader)  # пропускаємо заголовок
+        for row in reader:
+            x.append(float(row[0]))
+            y.append(float(row[1]))
+    return x, y
 
-# 2. Дослідження залежності похибки від кроку h 
-def central_diff(f, x, h):
-    return (f(x + h) - f(x - h)) / (2 * h)
+# формування матриці a
+def form_matrix(x, m):
+    a = [[0.0] * (m + 1) for _ in range(m + 1)]
+    for i in range(m + 1):
+        for j in range(m + 1):
+            a[i][j] = sum(xi**(i+j) for xi in x)
+    return a
 
-h_values = np.logspace(-20, 3, num=100)
-errors = []
+# формування вектора вільних членів b
+def form_vector(x, y, m):
+    b = [0.0] * (m + 1)
+    for i in range(m + 1):
+        b[i] = sum(y[k] * (x[k]**i) for k in range(len(x)))
+    return b
 
-for h in h_values:
-    approx = central_diff(M, t0, h)
-    errors.append(abs(approx - exact_val))
+# метод гауса з вибором головного елемента
+def gauss_solve(a, b):
+    n = len(a)
+    a_copy = [row[:] for row in a]
+    b_copy = b[:]
+    
+    for k in range(n - 1):
+        max_row = k
+        for i in range(k + 1, n):
+            if abs(a_copy[i][k]) > abs(a_copy[max_row][k]):
+                max_row = i
+        
+        a_copy[k], a_copy[max_row] = a_copy[max_row], a_copy[k]
+        b_copy[k], b_copy[max_row] = b_copy[max_row], b_copy[k]
+        
+        for i in range(k + 1, n):
+            if a_copy[k][k] == 0: continue
+            factor = a_copy[i][k] / a_copy[k][k]
+            for j in range(k, n):
+                a_copy[i][j] -= factor * a_copy[k][j]
+            b_copy[i] -= factor * b_copy[k]
 
-# Пошук оптимального h0
-min_error_idx = np.argmin(errors)
-h0 = h_values[min_error_idx]
-R0 = errors[min_error_idx]
+    x_sol = [0.0] * n
+    for i in range(n - 1, -1, -1):
+        s = sum(a_copy[i][j] * x_sol[j] for j in range(i + 1, n))
+        x_sol[i] = (b_copy[i] - s) / a_copy[i][i]
+    return x_sol
 
-print(f"--- Пункт 1 & 2 ---")
-print(f"Точне значення M'({t0}): {exact_val:.10f}")
-print(f"Оптимальний крок h0: {h0:.2e}")
-print(f"Найкраща точність R0: {R0:.2e}\n")
+# обчислення значень полінома
+def polynomial(x_vals, coef):
+    return [sum(coef[i] * (xv**i) for i in range(len(coef))) for xv in x_vals]
 
-# 3-6. Метод Рунге-Ромберга [cite: 192-197]
-h_fixed = 1e-3
-y_h = central_diff(M, t0, h_fixed)
-y_2h = central_diff(M, t0, 2 * h_fixed)
+# обчислення дисперсії
+def calculate_variance(y_true, y_approx):
+    n = len(y_true)
+    return sum((y_true[i] - y_approx[i])**2 for i in range(n)) / n
 
-R1 = abs(y_h - exact_val)
+# головний блок програми
+current_dir = os.path.dirname(os.path.abspath(__file__))
+data_path = os.path.join(current_dir, 'data.csv')
 
-# Формула Рунге-Ромберга [cite: 196]
-y_RR = y_h + (y_h - y_2h) / 3
-R2 = abs(y_RR - exact_val)
+x, y = read_data(data_path)
 
-print(f"--- Пункт 3-6 (Рунге-Ромберг) ---")
-print(f"y'(h)  при h={h_fixed}: {y_h:.10f}, Похибка R1: {R1:.2e}")
-print(f"y'(2h) при h={2*h_fixed}: {y_2h:.10f}")
-print(f"Уточнене y_RR: {y_RR:.10f}, Похибка R2: {R2:.2e}")
-print(f"Характер зміни: Похибка зменшилась у {R1/R2:.2f} разів\n")
+variances = []
+max_degree = 10 
+n_nodes = len(x)
 
-# 7. Метод Ейткена [cite: 199-208]
-y_4h = central_diff(M, t0, 4 * h_fixed)
+for m in range(1, max_degree + 1):
+    a_mat = form_matrix(x, m)
+    b_vec = form_vector(x, y, m)
+    coef = gauss_solve(a_mat, b_vec)
+    y_approx = polynomial(x, coef)
+    var = calculate_variance(y, y_approx)
+    variances.append(var)
 
-# Формула Ейткена [cite: 207]
-numerator = (y_2h**2) - (y_4h * y_h)
-denominator = 2 * y_2h - (y_4h + y_h)
-y_E = numerator / denominator
+optimal_m = variances.index(min(variances)) + 1
 
-# Порядок точності p [cite: 207]
-p = (1 / np.log(2)) * np.log(abs((y_4h - y_2h) / (y_2h - y_h)))
-R3 = abs(y_E - exact_val)
+a_opt = form_matrix(x, optimal_m)
+b_opt = form_vector(x, y, optimal_m)
+coef_opt = gauss_solve(a_opt, b_opt)
 
-print(f"--- Пункт 7 (Ейткен) ---")
-print(f"y'(4h) при h={4*h_fixed}: {y_4h:.10f}")
-print(f"Уточнене y_E: {y_E:.10f}, Похибка R3: {R3:.2e}")
-print(f"Оцінений порядок точності p: {p:.2f}")
+x_smooth = [x[0] + i * (x[-1] - x[0]) / 200 for i in range(201)]
+y_smooth = polynomial(x_smooth, coef_opt)
 
-# Візуалізація результатів (для звіту) [cite: 209]
-plt.figure(figsize=(10, 6))
-plt.loglog(h_values, errors, label='Залежність R(h)')
-plt.scatter(h0, R0, color='red', label=f'Оптимальне h0={h0:.1e}')
-plt.xlabel('Крок h')
-plt.ylabel('Похибка R')
-plt.title("Дослідження похибки чисельного диференціювання")
-plt.grid(True, which="both", ls="-")
-plt.legend()
+x_future = [25, 26, 27]
+y_future = polynomial(x_future, coef_opt)
+
+h1 = (x[-1] - x[0]) / (20 * n_nodes)
+x_err = []
+curr_x = x[0]
+while curr_x <= x[-1]:
+    x_err.append(curr_x)
+    curr_x += h1
+
+# ПОБУДОВА ГРАФІКІВ
+
+# Графік 1: Дисперсія
+plt.figure(1, figsize=(10, 5))
+plt.plot(range(1, max_degree + 1), variances, color='#4A90E2', marker='o', markersize=8, linewidth=2)
+plt.axvline(x=optimal_m, color='#E94E77', linestyle='--', label=f'Оптимальне m={optimal_m}')
+plt.fill_between(range(1, max_degree + 1), variances, color='#4A90E2', alpha=0.1)
+plt.title("Залежність дисперсії від ступеня полінома", fontsize=14, pad=15)
+plt.xlabel("Ступінь (m)", fontweight='bold')
+plt.ylabel("Дисперсія", fontweight='bold')
+plt.legend(frameon=True)
+plt.grid(True, linestyle=':', alpha=0.6)
+plt.tight_layout()
+
+# Графік 2: Апроксимація та прогноз
+plt.figure(2, figsize=(10, 6))
+plt.scatter(x, y, color='#333333', alpha=0.5, label='Фактичні дані', s=40)
+plt.plot(x_smooth, y_smooth, color='#4A90E2', linewidth=2.5, label=f'Апроксимація (m={optimal_m})')
+plt.plot(x_future, y_future, color='#E94E77', linestyle='--', marker='s', markersize=6, linewidth=2, label='Прогноз')
+plt.title("Апроксимація та прогноз температури", fontsize=14, pad=15)
+plt.xlabel("Місяць", fontweight='bold')
+plt.ylabel("Температура", fontweight='bold')
+plt.legend(facecolor='white', framealpha=1)
+plt.grid(True, linestyle='--', alpha=0.5)
+plt.tight_layout()
+
+# Графік 3: Похибка
+plt.figure(3, figsize=(10, 6))
+for m in range(1, max_degree + 1):
+    a_mat = form_matrix(x, m)
+    b_vec = form_vector(x, y, m)
+    c_m = gauss_solve(a_mat, b_vec)
+    y_approx_err = polynomial(x_err, c_m)
+    y_true_err = [get_y_true(xv, x, y) for xv in x_err]
+    error_vals = [abs(y_true_err[i] - y_approx_err[i]) for i in range(len(x_err))]
+    
+    if m == optimal_m:
+        plt.plot(x_err, error_vals, color='#D0021B', linewidth=3, label=f'm={m} (Оптимальна)', zorder=10)
+    else:
+        plt.plot(x_err, error_vals, alpha=0.2, color='#9B9B9B')
+
+plt.title("Розподіл абсолютної похибки", fontsize=14, pad=15)
+plt.xlabel("Місяць", fontweight='bold')
+plt.ylabel("Абсолютна похибка", fontweight='bold')
+plt.legend(loc='upper right')
+plt.grid(True, linestyle='-', alpha=0.3)
+plt.tight_layout()
+
 plt.show()
