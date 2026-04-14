@@ -165,6 +165,8 @@ def main():
     print(f"Кінцева точність (норма нев'язки): {current_eps}")
     print(f"Фрагмент уточненого розв'язку: {X_iter[:5]} ...")
 
-
+    # ЗБЕРЕЖЕННЯ ВЕКТОРА X У ФАЙЛ
+    np.savetxt("vector_X.txt", X_iter)
+    
 if __name__ == '__main__':
     main()
