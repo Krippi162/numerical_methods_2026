@@ -58,7 +58,7 @@ def matrix_norm(A):
     return max(sum(abs(x) for x in row) for row in A)
 
 
-# --- ЧАСТИНА 3: Ітераційні методи ---
+
 def simple_iteration(A, b, eps=1e-14):
     n = len(A)
     x = [1.0] * n  # Початкове наближення
@@ -122,7 +122,6 @@ def seidel(A, b, eps=1e-14):
     return x_new, iterations
 
 
-# --- ГОЛОВНИЙ БЛОК ВИКОНАННЯ ---
 if __name__ == "__main__":
     # 1. Генеруємо та записуємо вихідні дані
     generate_and_save_data(n=100)
@@ -146,6 +145,6 @@ if __name__ == "__main__":
     x_seidel, iters_seidel = seidel(A, b, eps)
     print(f"Метод Гауса-Зейделя:   {iters_seidel} ітерацій")
 
-    # 3. Зберігаємо результуючий вектор у файл
+    # 3. Зберігаємо результуючий вектор у файл.
     save_result_vector("result_vector_X.txt", x_seidel)
-    print("\nУспіх! Результуючий вектор X збережено у файл 'result_vector_X.txt'.")
+    print("67")
